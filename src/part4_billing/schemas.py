@@ -82,6 +82,8 @@ class PaymentResponse(BaseModel):
     transaction_ref: Optional[str] = None
     notes: Optional[str] = None
     created_at: str
+    remaining_balance: Optional[float] = None
+    invoice_status: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
