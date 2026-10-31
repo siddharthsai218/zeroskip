@@ -30,3 +30,20 @@
   - `tests/test_part4_billing.py`: Comprehensive test suite testing billing engine idempotency, state transitions, payments, reporting, and customer portal isolation
 - **Status**: COMPLETED
 - **Test Results**: All 10 tests passing (`pytest tests/test_part4_billing.py`), 21/21 tests passing across full repo
+
+## Part 1: Authentication, Access Control & User Identity
+- **Owner**: Developer 1
+- **Branch**: `feature/part1-auth-users`
+- **Scope**:
+  - `src/part1_auth/`
+    - `__init__.py`: Package entrypoint & service/dependency exports
+    - `schemas.py`: Pydantic models for registration, login, profiles, password reset, user status
+    - `services.py`: User creation, authentication, password reset, profile/status updates
+    - `dependencies.py`: `get_current_user`, `require_admin`, `require_staff`, `require_customer`
+    - `router.py`: FastAPI routes for `/auth`, `/users`, `/portal`
+  - `tests/test_part1_auth.py`: Isolated comprehensive API tests
+- **Notes**:
+  - First registered user becomes `ADMIN` when the `users` table is empty; subsequent self-registrations are `CUSTOMER`.
+  - Password reset tokens are stored only in `password_resets` and never returned by the API.
+- **Status**: COMPLETED
+- **Test Results**: All 27 tests passing (`pytest tests/test_part1_auth.py`)
