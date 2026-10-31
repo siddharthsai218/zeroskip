@@ -31,13 +31,25 @@ def seed_demo():
 
     with get_db() as conn:
         cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = OFF;")
+
+        # Clean slate for idempotent re-seeding
+        for table in [
+            "payments", "invoice_lines", "invoices", "billing_runs",
+            "subscription_events", "subscription_lines", "subscriptions",
+            "quotation_template_lines", "quotation_templates",
+            "product_variants", "products", "plans", "discount_rules",
+            "tax_rules", "password_resets", "users"
+        ]:
+            cursor.execute(f"DELETE FROM {table};")
+
+        cursor.execute("PRAGMA foreign_keys = ON;")
 
         print("--> Seeding Brightloop Users...")
         # 1. Users (Admin, Staff, Customers)
         # Note: passwords satisfy: > 8 chars, 1 uppercase, 1 lowercase, 1 special char
         default_pwd_hash = hash_password("BrightloopPass123!")
 
-        cursor.execute("DELETE FROM users WHERE email IN ('admin@brightloop.io', 'sales@brightloop.io', 'alice@smallshop.com', 'bob@megacorp.com')")
         cursor.execute(
             """
             INSERT INTO users (email, password_hash, full_name, role) VALUES 
@@ -58,7 +70,6 @@ def seed_demo():
 
         print("--> Seeding Catalog & Variants...")
         # 2. Products & Variants (including Odoo brand variant +560)
-        cursor.execute("DELETE FROM products WHERE name IN ('Brightloop ERP Core', 'Analytics Pro', '24/7 Premium Support')")
         cursor.execute(
             """
             INSERT INTO products (name, product_type, sales_price, cost_price, notes) VALUES 
@@ -74,7 +85,6 @@ def seed_demo():
         support_prod_id = prod_map["24/7 Premium Support"]
 
         # Variant: Brand = "Odoo" adds 560
-        cursor.execute("DELETE FROM product_variants WHERE product_id = ?", (core_prod_id,))
         cursor.execute(
             """
             INSERT INTO product_variants (product_id, attribute_name, attribute_value, price_extra) VALUES
@@ -89,7 +99,6 @@ def seed_demo():
 
         print("--> Seeding Subscription Plans...")
         # 3. Plans
-        cursor.execute("DELETE FROM plans WHERE code IN ('PLAN-MONTHLY-STD', 'PLAN-ANNUAL-ENT', 'PLAN-DAILY-TRIAL')")
         cursor.execute(
             """
             INSERT INTO plans (name, code, billing_interval, price, min_quantity, auto_close, allow_early_close, allow_pause, allow_renew) VALUES
@@ -105,7 +114,6 @@ def seed_demo():
 
         print("--> Seeding Tax & Discount Rules...")
         # 4. Tax Rules
-        cursor.execute("DELETE FROM tax_rules WHERE name IN ('Global Standard VAT', 'Zero Tax')")
         cursor.execute(
             """
             INSERT INTO tax_rules (name, rate_percent, is_default, is_active) VALUES
@@ -115,7 +123,6 @@ def seed_demo():
         )
 
         # 5. Discount Rules
-        cursor.execute("DELETE FROM discount_rules WHERE code IN ('SUMMER15', 'ENTERPRISE500')")
         cursor.execute(
             """
             INSERT INTO discount_rules (code, name, discount_type, discount_value, min_purchase_amount, is_active, max_uses, times_used) VALUES
@@ -128,7 +135,6 @@ def seed_demo():
 
         print("--> Seeding Quotation Templates...")
         # 6. Quotation Templates
-        cursor.execute("DELETE FROM quotation_templates WHERE name = 'Enterprise Starter Offer'")
         cursor.execute(
             """
             INSERT INTO quotation_templates (name, plan_id, validity_days, notes) VALUES

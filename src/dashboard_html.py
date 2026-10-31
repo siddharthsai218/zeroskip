@@ -12,7 +12,6 @@ def get_dashboard_html() -> str:
     <title>Brightloop Software - ZeroSkip Billing Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
         .glass-panel { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
@@ -49,7 +48,7 @@ def get_dashboard_html() -> str:
                 <span class="text-slate-400 px-2 font-medium">Role:</span>
                 <button onclick="setRole('ADMIN')" id="role-admin-btn" class="px-2.5 py-1 rounded font-semibold transition bg-purple-600 text-white">Admin</button>
                 <button onclick="setRole('STAFF')" id="role-staff-btn" class="px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white">Staff</button>
-                <button onclick="setRole('CUSTOMER')" id="role-customer-btn" class="px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white">Customer</button>
+                <button onclick="setRole('CUSTOMER')" id="role-customer-btn" class="px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white">Customer (Alice)</button>
             </div>
 
             <button onclick="triggerBillingRun()" id="billing-run-btn" class="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-lg shadow-emerald-500/20 transition active:scale-95">
@@ -232,11 +231,47 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Frontend Script Logic -->
+    <!-- Frontend Script Logic with Automated Auth Handling -->
     <script>
+        const CREDENTIALS = {
+            ADMIN: { email: 'admin@brightloop.io', password: 'BrightloopPass123!' },
+            STAFF: { email: 'sales@brightloop.io', password: 'BrightloopPass123!' },
+            CUSTOMER: { email: 'alice@smallshop.com', password: 'BrightloopPass123!' }
+        };
+
+        let authTokens = {};
         let currentRole = 'ADMIN';
 
-        function setRole(role) {
+        async function getAuthToken(role) {
+            if (authTokens[role]) return authTokens[role];
+            try {
+                const creds = CREDENTIALS[role] || CREDENTIALS.ADMIN;
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(creds)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    authTokens[role] = data.access_token;
+                    return data.access_token;
+                }
+            } catch (e) {
+                console.error('Auto-login error:', e);
+            }
+            return null;
+        }
+
+        async function apiFetch(url, options = {}) {
+            const token = await getAuthToken(currentRole);
+            const headers = options.headers || {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return fetch(url, { ...options, headers });
+        }
+
+        async function setRole(role) {
             currentRole = role;
             document.querySelectorAll('[id^="role-"]').forEach(btn => {
                 btn.className = 'px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white';
@@ -246,7 +281,7 @@ def get_dashboard_html() -> str:
                 activeBtn.className = 'px-2.5 py-1 rounded font-semibold transition bg-purple-600 text-white';
             }
             showToast(`Switched active perspective to: ${role}`);
-            refreshData();
+            await refreshData();
         }
 
         function showToast(msg) {
@@ -274,7 +309,7 @@ def get_dashboard_html() -> str:
             btn.disabled = true;
             btn.innerText = 'Evaluating cycle...';
             try {
-                const res = await fetch('/api/v1/billing/trigger', {
+                const res = await apiFetch('/api/v1/billing/trigger', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({})
@@ -300,7 +335,7 @@ def get_dashboard_html() -> str:
         async function loadKPIs() {
             const t0 = performance.now();
             try {
-                const res = await fetch('/api/v1/reports/summary');
+                const res = await apiFetch('/api/v1/reports/summary');
                 const t1 = performance.now();
                 const latency = (t1 - t0).toFixed(1);
                 document.getElementById('sla-last-ms').innerText = `${latency} ms`;
@@ -322,8 +357,9 @@ def get_dashboard_html() -> str:
 
         async function loadSubscriptions() {
             const tbody = document.getElementById('subscriptions-tbody');
+            const url = (currentRole === 'CUSTOMER') ? '/api/v1/portal/subscriptions' : '/api/v1/subscriptions';
             try {
-                const res = await fetch('/api/v1/subscriptions');
+                const res = await apiFetch(url);
                 const subs = await res.json();
                 if (!subs || subs.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-500">No subscriptions found. Click "Trigger Billing Day" or seed data.</td></tr>';
@@ -353,7 +389,7 @@ def get_dashboard_html() -> str:
         }
 
         async function updateSubStatus(subId, newStatus) {
-            await fetch(`/api/v1/subscriptions/${subId}/status`, {
+            await apiFetch(`/api/v1/subscriptions/${subId}/status`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ target_status: newStatus })
@@ -363,28 +399,32 @@ def get_dashboard_html() -> str:
         }
 
         async function pauseSub(subId) {
-            const res = await fetch(`/api/v1/subscriptions/${subId}/pause`, { method: 'POST' });
+            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/pause` : `/api/v1/subscriptions/${subId}/pause`;
+            const res = await apiFetch(url, { method: 'POST' });
             if (res.ok) showToast(`Subscription #${subId} paused`);
             else showToast('Plan policy does not allow pausing');
             refreshData();
         }
 
         async function resumeSub(subId) {
-            await fetch(`/api/v1/subscriptions/${subId}/resume`, { method: 'POST' });
+            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/resume` : `/api/v1/subscriptions/${subId}/resume`;
+            await apiFetch(url, { method: 'POST' });
             showToast(`Subscription #${subId} resumed to Active`);
             refreshData();
         }
 
         async function closeSub(subId) {
-            await fetch(`/api/v1/subscriptions/${subId}/close`, { method: 'POST' });
+            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/close` : `/api/v1/subscriptions/${subId}/close`;
+            await apiFetch(url, { method: 'POST' });
             showToast(`Subscription #${subId} closed`);
             refreshData();
         }
 
         async function loadInvoices() {
             const tbody = document.getElementById('invoices-tbody');
+            const url = (currentRole === 'CUSTOMER') ? '/api/v1/portal/invoices' : '/api/v1/invoices';
             try {
-                const res = await fetch('/api/v1/invoices');
+                const res = await apiFetch(url);
                 const invs = await res.json();
                 if (!invs || invs.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-500">No invoices yet. Click "Trigger Billing Day" to generate recurring invoices.</td></tr>';
@@ -419,7 +459,7 @@ def get_dashboard_html() -> str:
 
         async function loadOverdue() {
             try {
-                const res = await fetch('/api/v1/reports/overdue');
+                const res = await apiFetch('/api/v1/reports/overdue');
                 if (res.ok) {
                     const data = await res.json();
                     const container = document.getElementById('aging-bars');
@@ -457,7 +497,7 @@ def get_dashboard_html() -> str:
             const notes = document.getElementById('modal-notes').value;
 
             try {
-                const res = await fetch('/api/v1/payments', {
+                const res = await apiFetch('/api/v1/payments', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -482,7 +522,7 @@ def get_dashboard_html() -> str:
 
         async function runLiveSlaBenchmark() {
             const t0 = performance.now();
-            await fetch('/api/v1/reports/summary');
+            await apiFetch('/api/v1/reports/summary');
             const t1 = performance.now();
             const ms = (t1 - t0).toFixed(2);
             document.getElementById('sla-last-ms').innerText = `${ms} ms`;
