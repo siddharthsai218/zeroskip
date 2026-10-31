@@ -4,9 +4,13 @@ A unified subscription management and recurring billing platform engineered for 
 
 ---
 
-## 🚀 Quickstart & One-Click Launch
+## 🚀 Quickstart & How to Run
 
-The repository includes an automated launcher script that verifies dependencies, resets and seeds the demo database, and starts the FastAPI application server:
+You can run the application either with the **automated one-click script** or via **manual step-by-step commands**.
+
+### Option 1: Automated One-Click Launch (Recommended)
+
+The included launcher script automatically installs dependencies, seeds the demo database with realistic personas and products, and launches the Uvicorn application server:
 
 ```bash
 # 1. Clone repository
@@ -18,10 +22,47 @@ chmod +x run.sh
 ./run.sh
 ```
 
-Once running, access the services:
-- **Interactive Web Dashboard:** [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc API Specifications:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+---
+
+### Option 2: Step-by-Step Manual Setup
+
+If you prefer to configure your environment manually:
+
+```bash
+# 1. Create and activate a Python virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# 2. Install requirements
+pip install -r requirements.txt
+
+# 3. Seed demo data (creates realistic users, Odoo products, subscriptions, and invoices)
+python scripts/seed_demo.py
+
+# 4. Start the application server
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+---
+
+### Accessing the Application
+
+Once started, open your browser to:
+- 🖥️ **Interactive Web Dashboard:** [http://localhost:8000](http://localhost:8000)
+- 📖 **Interactive Swagger API Docs (OpenAPI):** [http://localhost:8000/docs](http://localhost:8000/docs)
+- 📄 **ReDoc Specifications:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+---
+
+### Running the Tests & Benchmark
+
+```bash
+# Run the complete test suite (all 55 tests across Parts 1-4)
+pytest
+
+# Run the 10,000-subscription sub-2-second SLA performance benchmark
+python scripts/stress_test.py
+```
 
 ---
 
