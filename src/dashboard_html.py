@@ -1,6 +1,12 @@
 """
-Single-file self-contained modern HTML/Tailwind web dashboard for Brightloop Software.
-Requires zero npm/node build tools and connects directly to FastAPI backend APIs.
+Modern Interactive Web Dashboard for Brightloop Software
+Features:
+- Real-time Authentication & RBAC (Admin, Staff, Customer)
+- Real Login & Registration modal connected to /api/v1/auth/login and /api/v1/auth/register
+- Quick Demo One-Click Persona Fillers
+- Dynamic Role-Aware Views (Customer Portal vs Staff/Admin Console)
+- ZeroSkip Automated Billing Engine live trigger
+- Financial Analytics & AR Aging Reports
 """
 
 def get_dashboard_html() -> str:
@@ -28,7 +34,7 @@ def get_dashboard_html() -> str:
 <body class="min-h-screen flex flex-col">
 
     <!-- Top Navigation Bar -->
-    <header class="glass-panel border-b border-slate-800 sticky top-0 z-50 px-6 py-3.5 flex justify-between items-center">
+    <header class="glass-panel border-b border-slate-800 sticky top-0 z-40 px-6 py-3.5 flex justify-between items-center">
         <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center font-black text-xl text-white shadow-lg shadow-purple-500/30">
                 ∞
@@ -42,18 +48,29 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
-        <!-- Role Quick Switcher & Actions -->
+        <!-- Right Side: User Profile & Actions -->
         <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
-                <span class="text-slate-400 px-2 font-medium">Role:</span>
-                <button onclick="setRole('ADMIN')" id="role-admin-btn" class="px-2.5 py-1 rounded font-semibold transition bg-purple-600 text-white">Admin</button>
-                <button onclick="setRole('STAFF')" id="role-staff-btn" class="px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white">Staff</button>
-                <button onclick="setRole('CUSTOMER')" id="role-customer-btn" class="px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white">Customer (Alice)</button>
-            </div>
-
-            <button onclick="triggerBillingRun()" id="billing-run-btn" class="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-lg shadow-emerald-500/20 transition active:scale-95">
+            <!-- Trigger Billing Run (Staff/Admin only) -->
+            <button onclick="triggerBillingRun()" id="billing-run-btn" class="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white px-3.5 py-2 rounded-lg font-bold text-xs shadow-lg shadow-emerald-500/20 transition active:scale-95">
                 <span>⚡ Trigger Billing Day</span>
             </button>
+
+            <!-- User Session Card -->
+            <div id="user-session-box" class="flex items-center gap-2.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                <div class="w-6 h-6 rounded-full bg-purple-600/30 border border-purple-500/50 flex items-center justify-center text-purple-300 font-bold text-[10px]" id="user-avatar">
+                    A
+                </div>
+                <div>
+                    <div class="font-bold text-white flex items-center gap-1.5 leading-none">
+                        <span id="user-display-name">Elena Rostova</span>
+                        <span id="user-role-badge" class="badge badge-active text-[9px] py-0 px-1.5">ADMIN</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 leading-tight mt-0.5" id="user-display-email">admin@brightloop.io</div>
+                </div>
+                <button onclick="openAuthModal()" class="ml-2 text-slate-400 hover:text-white text-[11px] font-semibold underline underline-offset-2">
+                    Switch
+                </button>
+            </div>
 
             <a href="/docs" target="_blank" class="text-xs font-semibold text-slate-400 hover:text-white px-3 py-2 rounded-lg border border-slate-800 hover:border-slate-700 transition">
                 API Docs ↗
@@ -72,8 +89,19 @@ def get_dashboard_html() -> str:
             <button onclick="hideToast()" class="text-slate-400 hover:text-white text-xs font-bold">DISMISS</button>
         </div>
 
+        <!-- Role Guidance Banner -->
+        <div id="portal-banner" class="hidden glass-panel border-blue-500/30 bg-blue-950/20 p-4 rounded-xl flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 text-blue-300">
+                <span>👤</span>
+                <span>You are browsing as <strong>Customer (Portal View)</strong>. Showing exclusively your authorized subscriptions and invoices.</span>
+            </div>
+            <button onclick="openAuthModal()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-[11px]">
+                Switch to Admin / Staff
+            </button>
+        </div>
+
         <!-- KPI Summary Cards Row (Finance Lead) -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div id="kpi-row" class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="glass-panel p-5 rounded-2xl relative overflow-hidden">
                 <div class="text-slate-400 text-xs font-bold uppercase tracking-wider">Active Subscriptions</div>
                 <div id="kpi-active-subs" class="text-3xl font-extrabold text-white mt-1">--</div>
@@ -193,6 +221,61 @@ def get_dashboard_html() -> str:
 
     </main>
 
+    <!-- AUTHENTICATION & LOGIN MODAL -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel border-slate-700 bg-slate-900 w-full max-w-lg p-6 rounded-2xl shadow-2xl space-y-5">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div>
+                    <h3 class="font-bold text-white text-base">User Authentication & Switcher</h3>
+                    <p class="text-xs text-slate-400">Sign in with any user account or click a 1-click demo persona</p>
+                </div>
+                <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+            </div>
+
+            <!-- 1-Click Quick Demo Sign-Ins -->
+            <div class="space-y-2">
+                <div class="text-[11px] font-bold text-purple-300 uppercase tracking-wider">1-Click Demo Personas (Pre-Seeded)</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="quickLogin('admin@brightloop.io', 'BrightloopPass123!')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-purple-950/40 border border-slate-800 hover:border-purple-600 transition text-left group">
+                        <div class="text-xs font-bold text-white group-hover:text-purple-300">👑 Elena (Admin)</div>
+                        <div class="text-[10px] text-slate-400">Full system control</div>
+                    </button>
+                    <button onclick="quickLogin('sales@brightloop.io', 'BrightloopPass123!')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-blue-950/40 border border-slate-800 hover:border-blue-600 transition text-left group">
+                        <div class="text-xs font-bold text-white group-hover:text-blue-300">💼 Marcus (Staff)</div>
+                        <div class="text-[10px] text-slate-400">Sales & Invoicing</div>
+                    </button>
+                    <button onclick="quickLogin('alice@smallshop.com', 'BrightloopPass123!')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-emerald-950/40 border border-slate-800 hover:border-emerald-600 transition text-left group">
+                        <div class="text-xs font-bold text-white group-hover:text-emerald-300">👤 Alice (Customer)</div>
+                        <div class="text-[10px] text-slate-400">Customer Portal</div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="relative flex py-1 items-center">
+                <div class="flex-grow border-t border-slate-800"></div>
+                <span class="flex-shrink mx-3 text-slate-500 text-[10px] font-bold uppercase">Or Enter Credentials</span>
+                <div class="flex-grow border-t border-slate-800"></div>
+            </div>
+
+            <!-- Manual Login Form -->
+            <form onsubmit="handleManualLogin(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="text-slate-400 block mb-1">Email Address</label>
+                    <input id="auth-email" type="email" required placeholder="name@brightloop.io" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Password</label>
+                    <input id="auth-password" type="password" required placeholder="Enter password" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                </div>
+                <div id="auth-error" class="hidden text-rose-400 text-xs"></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeAuthModal()" class="px-3 py-2 rounded text-slate-400 hover:text-white text-xs">Close</button>
+                    <button type="submit" id="auth-submit-btn" class="px-5 py-2 bg-purple-600 hover:bg-purple-500 font-bold text-white text-xs rounded-lg shadow-lg transition">Sign In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Payment Modal -->
     <div id="payment-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="glass-panel border-slate-700 bg-slate-900 w-full max-w-md p-6 rounded-2xl shadow-2xl space-y-4">
@@ -231,57 +314,111 @@ def get_dashboard_html() -> str:
         </div>
     </div>
 
-    <!-- Frontend Script Logic with Automated Auth Handling -->
+    <!-- Frontend Script Logic with Dynamic Auth Session Management -->
     <script>
-        const CREDENTIALS = {
-            ADMIN: { email: 'admin@brightloop.io', password: 'BrightloopPass123!' },
-            STAFF: { email: 'sales@brightloop.io', password: 'BrightloopPass123!' },
-            CUSTOMER: { email: 'alice@smallshop.com', password: 'BrightloopPass123!' }
-        };
+        let currentAuthToken = localStorage.getItem('brightloop_token') || null;
+        let currentUser = JSON.parse(localStorage.getItem('brightloop_user') || 'null');
 
-        let authTokens = {};
-        let currentRole = 'ADMIN';
+        function openAuthModal() {
+            document.getElementById('auth-modal').classList.remove('hidden');
+            document.getElementById('auth-error').classList.add('hidden');
+        }
 
-        async function getAuthToken(role) {
-            if (authTokens[role]) return authTokens[role];
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+        }
+
+        async function quickLogin(email, password) {
+            document.getElementById('auth-email').value = email;
+            document.getElementById('auth-password').value = password;
+            await executeLogin(email, password);
+        }
+
+        async function handleManualLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            await executeLogin(email, password);
+        }
+
+        async function executeLogin(email, password) {
+            const btn = document.getElementById('auth-submit-btn');
+            const errDiv = document.getElementById('auth-error');
+            btn.disabled = true;
+            btn.innerText = 'Authenticating...';
+            errDiv.classList.add('hidden');
+
             try {
-                const creds = CREDENTIALS[role] || CREDENTIALS.ADMIN;
                 const res = await fetch('/api/v1/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(creds)
+                    body: JSON.stringify({ email: email.trim(), password: password })
                 });
-                if (res.ok) {
-                    const data = await res.json();
-                    authTokens[role] = data.access_token;
-                    return data.access_token;
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Authentication failed');
                 }
-            } catch (e) {
-                console.error('Auto-login error:', e);
+
+                const data = await res.json();
+                currentAuthToken = data.access_token;
+                localStorage.setItem('brightloop_token', currentAuthToken);
+
+                // Fetch real profile from backend
+                const profileRes = await fetch('/api/v1/portal/profile', {
+                    headers: { 'Authorization': `Bearer ${currentAuthToken}` }
+                });
+                if (profileRes.ok) {
+                    currentUser = await profileRes.json();
+                    localStorage.setItem('brightloop_user', JSON.stringify(currentUser));
+                } else {
+                    // Fallback decoding from role
+                    const role = email.includes('admin') ? 'ADMIN' : (email.includes('sales') ? 'STAFF' : 'CUSTOMER');
+                    currentUser = { email, full_name: email.split('@')[0], role };
+                    localStorage.setItem('brightloop_user', JSON.stringify(currentUser));
+                }
+
+                updateUserHeader();
+                closeAuthModal();
+                showToast(`Signed in successfully as ${currentUser.full_name} (${currentUser.role})`);
+                await refreshData();
+            } catch (err) {
+                errDiv.innerText = err.message;
+                errDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Sign In';
             }
-            return null;
+        }
+
+        function updateUserHeader() {
+            if (!currentUser) return;
+            document.getElementById('user-display-name').innerText = currentUser.full_name || currentUser.email;
+            document.getElementById('user-display-email').innerText = currentUser.email;
+            document.getElementById('user-avatar').innerText = (currentUser.full_name || currentUser.email).charAt(0).toUpperCase();
+
+            const badge = document.getElementById('user-role-badge');
+            badge.innerText = currentUser.role;
+            badge.className = `badge ${currentUser.role === 'ADMIN' ? 'badge-active' : (currentUser.role === 'STAFF' ? 'badge-confirmed' : 'badge-quotation')} text-[9px] py-0 px-1.5`;
+
+            // Adjust view based on role
+            const isCustomer = (currentUser.role === 'CUSTOMER');
+            document.getElementById('portal-banner').classList.toggle('hidden', !isCustomer);
+            document.getElementById('billing-run-btn').classList.toggle('hidden', isCustomer);
+            document.getElementById('kpi-row').classList.toggle('hidden', isCustomer);
+            document.getElementById('btn-tab-reports').classList.toggle('hidden', isCustomer);
         }
 
         async function apiFetch(url, options = {}) {
-            const token = await getAuthToken(currentRole);
+            if (!currentAuthToken) {
+                // Auto-authenticate as default admin if no token present
+                await executeLogin('admin@brightloop.io', 'BrightloopPass123!');
+            }
             const headers = options.headers || {};
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            if (currentAuthToken) {
+                headers['Authorization'] = `Bearer ${currentAuthToken}`;
             }
             return fetch(url, { ...options, headers });
-        }
-
-        async function setRole(role) {
-            currentRole = role;
-            document.querySelectorAll('[id^="role-"]').forEach(btn => {
-                btn.className = 'px-2.5 py-1 rounded font-semibold transition text-slate-400 hover:text-white';
-            });
-            const activeBtn = document.getElementById(`role-${role.toLowerCase()}-btn`);
-            if (activeBtn) {
-                activeBtn.className = 'px-2.5 py-1 rounded font-semibold transition bg-purple-600 text-white';
-            }
-            showToast(`Switched active perspective to: ${role}`);
-            await refreshData();
         }
 
         function showToast(msg) {
@@ -326,10 +463,12 @@ def get_dashboard_html() -> str:
         }
 
         async function refreshData() {
-            loadKPIs();
+            if (!currentUser || currentUser.role !== 'CUSTOMER') {
+                loadKPIs();
+                loadOverdue();
+            }
             loadSubscriptions();
             loadInvoices();
-            loadOverdue();
         }
 
         async function loadKPIs() {
@@ -357,12 +496,14 @@ def get_dashboard_html() -> str:
 
         async function loadSubscriptions() {
             const tbody = document.getElementById('subscriptions-tbody');
-            const url = (currentRole === 'CUSTOMER') ? '/api/v1/portal/subscriptions' : '/api/v1/subscriptions';
+            const isCustomer = (currentUser && currentUser.role === 'CUSTOMER');
+            const url = isCustomer ? '/api/v1/portal/subscriptions' : '/api/v1/subscriptions';
+
             try {
                 const res = await apiFetch(url);
                 const subs = await res.json();
                 if (!subs || subs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-500">No subscriptions found. Click "Trigger Billing Day" or seed data.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-500">No subscriptions found for this account.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = subs.map(s => `
@@ -374,9 +515,9 @@ def get_dashboard_html() -> str:
                         <td class="py-3 px-3 font-mono text-slate-300">${s.next_billing_date || 'N/A'}</td>
                         <td class="py-3 px-3 text-right font-bold text-white">$${s.total_recurring_amount.toFixed(2)}</td>
                         <td class="py-3 px-3 text-center space-x-1">
-                            ${s.status === 'Draft' ? `<button onclick="updateSubStatus(${s.id}, 'Quotation')" class="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-purple-200 rounded text-[10px]">Quote</button>` : ''}
-                            ${s.status === 'Quotation' ? `<button onclick="updateSubStatus(${s.id}, 'Confirmed')" class="px-2 py-1 bg-blue-900/60 hover:bg-blue-800 text-blue-200 rounded text-[10px]">Confirm</button>` : ''}
-                            ${s.status === 'Confirmed' ? `<button onclick="updateSubStatus(${s.id}, 'Active')" class="px-2 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 rounded text-[10px]">Activate</button>` : ''}
+                            ${!isCustomer && s.status === 'Draft' ? `<button onclick="updateSubStatus(${s.id}, 'Quotation')" class="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-purple-200 rounded text-[10px]">Quote</button>` : ''}
+                            ${!isCustomer && s.status === 'Quotation' ? `<button onclick="updateSubStatus(${s.id}, 'Confirmed')" class="px-2 py-1 bg-blue-900/60 hover:bg-blue-800 text-blue-200 rounded text-[10px]">Confirm</button>` : ''}
+                            ${!isCustomer && s.status === 'Confirmed' ? `<button onclick="updateSubStatus(${s.id}, 'Active')" class="px-2 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 rounded text-[10px]">Activate</button>` : ''}
                             ${s.status === 'Active' ? `<button onclick="pauseSub(${s.id})" class="px-2 py-1 bg-amber-900/60 hover:bg-amber-800 text-amber-200 rounded text-[10px]">Pause</button>` : ''}
                             ${s.status === 'Paused' ? `<button onclick="resumeSub(${s.id})" class="px-2 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 rounded text-[10px]">Resume</button>` : ''}
                             ${['Active', 'Confirmed'].includes(s.status) ? `<button onclick="closeSub(${s.id})" class="px-2 py-1 bg-rose-900/60 hover:bg-rose-800 text-rose-200 rounded text-[10px]">Close</button>` : ''}
@@ -399,7 +540,8 @@ def get_dashboard_html() -> str:
         }
 
         async function pauseSub(subId) {
-            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/pause` : `/api/v1/subscriptions/${subId}/pause`;
+            const isCustomer = (currentUser && currentUser.role === 'CUSTOMER');
+            const url = isCustomer ? `/api/v1/portal/subscriptions/${subId}/pause` : `/api/v1/subscriptions/${subId}/pause`;
             const res = await apiFetch(url, { method: 'POST' });
             if (res.ok) showToast(`Subscription #${subId} paused`);
             else showToast('Plan policy does not allow pausing');
@@ -407,14 +549,16 @@ def get_dashboard_html() -> str:
         }
 
         async function resumeSub(subId) {
-            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/resume` : `/api/v1/subscriptions/${subId}/resume`;
+            const isCustomer = (currentUser && currentUser.role === 'CUSTOMER');
+            const url = isCustomer ? `/api/v1/portal/subscriptions/${subId}/resume` : `/api/v1/subscriptions/${subId}/resume`;
             await apiFetch(url, { method: 'POST' });
             showToast(`Subscription #${subId} resumed to Active`);
             refreshData();
         }
 
         async function closeSub(subId) {
-            const url = (currentRole === 'CUSTOMER') ? `/api/v1/portal/subscriptions/${subId}/close` : `/api/v1/subscriptions/${subId}/close`;
+            const isCustomer = (currentUser && currentUser.role === 'CUSTOMER');
+            const url = isCustomer ? `/api/v1/portal/subscriptions/${subId}/close` : `/api/v1/subscriptions/${subId}/close`;
             await apiFetch(url, { method: 'POST' });
             showToast(`Subscription #${subId} closed`);
             refreshData();
@@ -422,12 +566,14 @@ def get_dashboard_html() -> str:
 
         async function loadInvoices() {
             const tbody = document.getElementById('invoices-tbody');
-            const url = (currentRole === 'CUSTOMER') ? '/api/v1/portal/invoices' : '/api/v1/invoices';
+            const isCustomer = (currentUser && currentUser.role === 'CUSTOMER');
+            const url = isCustomer ? '/api/v1/portal/invoices' : '/api/v1/invoices';
+
             try {
                 const res = await apiFetch(url);
                 const invs = await res.json();
                 if (!invs || invs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-500">No invoices yet. Click "Trigger Billing Day" to generate recurring invoices.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-500">No invoices found for this account.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = invs.map(inv => `
@@ -444,7 +590,7 @@ def get_dashboard_html() -> str:
                             <a href="/api/v1/invoices/${inv.id}/print" target="_blank" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[10px] font-bold">
                                 🖨 Print
                             </a>
-                            ${inv.amount_due > 0.01 && inv.status !== 'Cancelled' ? `
+                            ${!isCustomer && inv.amount_due > 0.01 && inv.status !== 'Cancelled' ? `
                                 <button onclick="openPaymentModal(${inv.id}, ${inv.amount_due})" class="px-2 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 rounded text-[10px] font-bold">
                                     💳 Pay
                                 </button>
@@ -529,8 +675,15 @@ def get_dashboard_html() -> str:
             showToast(`🚀 Live SLA Check: Financial Aggregates completed in ${ms}ms!`);
         }
 
-        // Initial Load on Page Mount
-        window.onload = () => { refreshData(); };
+        // On Page Load: initialize session
+        window.onload = async () => {
+            if (!currentAuthToken || !currentUser) {
+                await quickLogin('admin@brightloop.io', 'BrightloopPass123!');
+            } else {
+                updateUserHeader();
+                await refreshData();
+            }
+        };
     </script>
 </body>
 </html>
