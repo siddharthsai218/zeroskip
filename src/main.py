@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from src.common.db import init_db
+from src.dashboard_html import get_dashboard_html
 from src.part1_auth.router import router as auth_router
 from src.part2_catalog.router import router as catalog_router
 from src.part3_subscriptions.router import router as subscriptions_router
@@ -24,7 +25,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Enable CORS for frontend applications (portal, admin dashboard)
+# Enable CORS for frontend applications
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,10 +34,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root redirect to interactive API docs
-@app.get("/", include_in_schema=False)
-def root_redirect():
-    return RedirectResponse(url="/docs")
+# Visual Executive & Operations Web Dashboard
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+def get_web_dashboard():
+    return HTMLResponse(content=get_dashboard_html(), status_code=200)
 
 # Health check endpoint
 @app.get("/health", tags=["Health"])
